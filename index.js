@@ -1,18 +1,13 @@
 const { Builder, By, Chrome, Key, TimeUnit, until } = require('selenium-webdriver');
 const fs = require('fs');
+const Query = require('./query')
 
 var loginUrl = 'https://www.ancestry.com/account/signin';
-const fileNameRegex = /([a-zA-Z ]+): /g;
 const refreshError =
   "Oops, we've hit a snag. There was an unexpected error trying to download the image.\nPlease refresh the page and try again.";
-const locationRegex = /Census Place: ([a-zA-Z, ]+);/
 
-const citationToFilename = citation => `Census -- ${citation.replace(fileNameRegex, '').replace(/ /g, '')}`;
 
 const start = async () => {
-  const citation = "Year: 1910; Census Place: Artesia, Iroquois, Illinois; Roll: T624_292; Page: 1B; Enumeration District: 0060; FHL microfilm: 1374305"
-  const [ township, city, state ] = locationRegex.test(citation) && citation.match(locationRegex)[1].split(', ')
-
   let driver = await new Builder()
     .forBrowser('chrome')
     .setChromeOptions(chrome =>
@@ -31,6 +26,10 @@ const start = async () => {
       ),
       60000
     );
+
+    var citation = "Year: 1910; Census Place: Artesia, Iroquois, Illinois; Roll: T624_292; Page: 1B; Enumeration District: 0060; FHL microfilm: 1374305"
+    var query = Query.new(driver, citation)
+    var { township, city, state } = query.locations()
 
     await driver.get('https://www.ancestry.com/interactive/7884/31111_4328187-00353');
     await driver.findElement(By.xpath('//*[@id="saveMenuBtn"]')).click();
@@ -52,18 +51,8 @@ const start = async () => {
         return resolve()
       })
     })
-    if (!fs.existsSync(`/Users/aschauer/Downloads/genealogy/media/${state}`)) {
-      fs.mkdirSync(`/Users/aschauer/Downloads/genealogy/media/${state}`)
-    }
-    if (!fs.existsSync(`/Users/aschauer/Downloads/genealogy/media/${state}/${city}`)) {
-      fs.mkdirSync(`/Users/aschauer/Downloads/genealogy/media/${state}/${city}`)
-    }
-    if (!fs.existsSync(`/Users/aschauer/Downloads/genealogy/media/${state}/${city}/${township}`)) {
-      fs.mkdirSync(`/Users/aschauer/Downloads/genealogy/media/${state}/${city}/${township}`)
-    }
-    let file = fs.readdirSync('/Users/aschauer/Downloads').sort().find(file => /^[_\-0-9]+\.jpg$/.test(file));
-    fs.renameSync(`/Users/aschauer/Downloads/${file}`, `/Users/aschauer/Downloads/genealogy/media/${state}/${city}/${township}/${citationToFilename(citation)}.jpg`)
-    // await driver.wait(until.elementLocated(By.xpath('//*[@id="fake"]')), 10000)
+    query.createDirectories()
+    query.moveFile()
     // await census['1910'](driver, 'Illinois', 'Iroquois', 'Artesia', 'District 0060')
   } finally {
     await driver.quit();
